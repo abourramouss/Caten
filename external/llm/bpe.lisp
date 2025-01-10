@@ -9,28 +9,50 @@
    (cache :type hash-table :initform (make-hash-table :test #'equal) :reader bpe-cache))
   (:documentation "An implementation of Byte Pair Encoding tokenizer. Initialized by the make-bpe-tokenizer function."))
 
-(defun make-bpe-tokenizer (tokens merges)
+
+
+(defun make-bpe-tokenizer (tokens merges &key (from-file-p nil))
   "
 ```
-(make-bpe-tokenizer tokens merges)
+(make-bpe-tokenizer tokens merges from-file-p)
 ```
 
 Creates a new instance of BPETokenizer from given tokens and merges.
 
 - Tokens[string] A string that contains the vocabulary of the tokenizer. This function will split the given string by whitespace and label each token from 0 to N. (e.g.: `hello word a b c` -> `hello:0 word:1 a:2 b:3 c:4`)
 - Merges[string] A string that contains the BPE merges of the tokenizer, split by newline, and then space. (e.g.: 'a b\nb c\n' -> `a b:0 b c:1`)
+-From-file-p: ids of trained tokens taken from the tokens.txt file
 "
   (declare (type string tokens merges) (optimize (speed 3)))
   (let ((encoder (make-hash-table :test #'equal))
         (decoder (make-hash-table))
         (bpe-merges (make-hash-table :test #'equal))
-        (bpe-pairs (cdr (loop for mstr in (split "\\n" merges) collect (split " " mstr)))))
-    (loop for token in (cdr (split " " tokens))
-          for nth fixnum upfrom 0 do
-            (setf (gethash token encoder) nth (gethash nth decoder) token))
-    (loop for p in bpe-pairs
-          for nth fixnum upfrom 0 do
-            (setf (gethash p bpe-merges) nth))
+        (bpe-pairs (loop for mstr of-type (or null string) in (cl-ppcre:split "\\n" merges)
+                         when (and (stringp mstr) (> (length mstr) 0))
+                         collect (cl-ppcre:split "\\s+" mstr))))
+    ;; Handle tokens based on format
+    (if from-file-p
+        ;; Load from 'token ID' format
+        (loop for line of-type (or null string) in (cl-ppcre:split "\\n" tokens)
+              when (and (stringp line) (> (length line) 0))
+              do (let* ((parts (cl-ppcre:split "\\s+" line))
+                        (token (first parts))
+                        (id-str (second parts)))
+                   (when (and token id-str)
+                     (let ((id (parse-integer id-str :junk-allowed t)))
+                       (when id
+                         (setf (gethash token encoder) id
+                               (gethash id decoder) token))))))
+        (loop for token in (cdr (cl-ppcre:split "\\s+" tokens))
+              for nth fixnum upfrom 0 
+              do (setf (gethash token encoder) nth 
+                       (gethash nth decoder) token)))
+    
+    (loop for p in (cdr bpe-pairs)
+          for nth fixnum upfrom 0 
+          when p
+          do (setf (gethash p bpe-merges) nth))
+    
     (make-instance 'BPETokenizer :encoder encoder :decoder decoder :merges bpe-merges)))
 
 (declaim (ftype (function (list) list) get-pairs))
@@ -38,48 +60,48 @@ Creates a new instance of BPETokenizer from given tokens and merges.
   (declare (type list token) (optimize (speed 3)))
   ;; e.g.: HIThere -> ((H I) (I T) (T H) (H E) (E R) (R E))
   (loop for index fixnum upfrom 0 below (1- (length token))
-	collect
-	(list (nth index token) (nth (1+ index) token))))
+        collect
+           (list (nth index token) (nth (1+ index) token))))
 ;; TODO: When I have a time, Let's rewrite bpe-split using xsubseq for maximize the performance! (+ i think i should refactor this function)
 (defun bpe-split (tokenizer token)
   (declare (type string token)
            (optimize (speed 3)))
   (let* ((bpe-merges (bpe-merges tokenizer))
          (word (map 'list #'string (coerce token 'list)))
- 	 (out-of-range (+ 2 (hash-table-count bpe-merges)))
-	 (pairs (get-pairs word))
+         (out-of-range (+ 2 (hash-table-count bpe-merges)))
+         (pairs (get-pairs word))
          (cache (gethash token (bpe-cache tokenizer))))
     (when cache (return-from bpe-split cache))
     (when (null pairs) (return-from bpe-split token))
     (loop named bpe-iter while t do
-      (let* ((smallest (loop for pair in pairs minimize (the fixnum (or (gethash pair bpe-merges) out-of-range))))
-	     (bigram   (find smallest pairs :test #'eql :key #'(lambda (x) (gethash x bpe-merges)))))
-	(when (or (null bigram) (>= smallest out-of-range)) (return-from bpe-iter)) ;; Break from the loop
-	(multiple-value-bind (first second) (apply #'values bigram)
-	  (let ((new-word) (i 0))
-            (declare (type list new-word))
-	    (loop named bpe-word-iter while (< i (length word)) do
-              (let ((j (position first word :start i :test #'equal)))
-                (when (null j)
-                  ;; Appending the rest to the new-word, and break from the inner loop
-                  (setf new-word (nconc new-word (subseq word i)))
-                  (return-from bpe-word-iter))
-                ;; Adding the partial word (i ~ j) to the new-word
-                (setf new-word (nconc new-word (subseq word i j))
-                      i j) ;; the next starting point is j
-                (if (and (equal (nth i word) first)
-                         (< i (1- (length word)))
-                         (equal (nth (1+ i) word) second))
-                    ;; Two words are mergeable
-                    (setf new-word (nconc new-word (list (concatenate 'string first second)))
-                          i (+ i 2))
-                    ;; Keep separating two words
-                    (setf new-word (nconc new-word (list (nth i word)))
-                          i (1+ i)))))
-	    (setf word new-word)
-	    (if (= (length word) 1)
-		(return-from bpe-iter)
-		(setf pairs (get-pairs word)))))))
+             (let* ((smallest (loop for pair in pairs minimize (the fixnum (or (gethash pair bpe-merges) out-of-range))))
+                    (bigram   (find smallest pairs :test #'eql :key #'(lambda (x) (gethash x bpe-merges)))))
+               (when (or (null bigram) (>= smallest out-of-range)) (return-from bpe-iter)) ;; Break from the loop
+               (multiple-value-bind (first second) (apply #'values bigram)
+                 (let ((new-word) (i 0))
+                   (declare (type list new-word))
+                   (loop named bpe-word-iter while (< i (length word)) do
+                            (let ((j (position first word :start i :test #'equal)))
+                              (when (null j)
+                                ;; Appending the rest to the new-word, and break from the inner loop
+                                (setf new-word (nconc new-word (subseq word i)))
+                                (return-from bpe-word-iter))
+                              ;; Adding the partial word (i ~ j) to the new-word
+                              (setf new-word (nconc new-word (subseq word i j))
+                                    i j) ;; the next starting point is j
+                              (if (and (equal (nth i word) first)
+                                       (< i (1- (length word)))
+                                       (equal (nth (1+ i) word) second))
+                                  ;; Two words are mergeable
+                                  (setf new-word (nconc new-word (list (concatenate 'string first second)))
+                                        i (+ i 2))
+                                  ;; Keep separating two words
+                                  (setf new-word (nconc new-word (list (nth i word)))
+                                        i (1+ i)))))
+                   (setf word new-word)
+                   (if (= (length word) 1)
+                       (return-from bpe-iter)
+                       (setf pairs (get-pairs word)))))))
     (setf (gethash token (bpe-cache tokenizer)) word)
     word))
 
@@ -92,12 +114,12 @@ Creates a new instance of BPETokenizer from given tokens and merges.
            (bpe-tokens))
       (declare (type list tokens bpe-tokens))
       (loop for token string in tokens do
-        (let ((token
-                (with-output-to-string (tmp)
-                  (loop for n upfrom 0 below (length token)
-                        do (princ (gethash (char-code (aref (the (simple-array character (*)) token) n)) *byte2unicode*) tmp)))))
-	  (dolist (bpetoken (bpe-split tokenizer token))
-	    (push (or (gethash bpetoken encoder) 0) bpe-tokens))))
+               (let ((token
+                       (with-output-to-string (tmp)
+                         (loop for n upfrom 0 below (length token)
+                               do (princ (gethash (char-code (aref (the (simple-array character (*)) token) n)) *byte2unicode*) tmp)))))
+                 (dolist (bpetoken (bpe-split tokenizer token))
+                   (push (or (gethash bpetoken encoder) 0) bpe-tokens))))
       (nreverse bpe-tokens))))
 
 (defmethod decode ((tokenizer BPETokenizer) tokens)
@@ -108,7 +130,7 @@ Creates a new instance of BPETokenizer from given tokens and merges.
       (declare (type string text))
       (with-output-to-string (out)
         (loop for pos fixnum upfrom 0 below (length text) do
-	  (let ((code (gethash (char-code (aref text pos)) *byte2unicode*)))
-	    (if code
-	        (princ code out)
-                (princ " " out))))))))
+                 (let ((code (gethash (char-code (aref text pos)) *byte2unicode*)))
+                   (if code
+                       (princ code out)
+                       (princ " " out))))))))

@@ -12,6 +12,7 @@
    #:BPETokenizer
    #:encode
    #:decode
-   #:make-bpe-tokenizer))
+   #:make-bpe-tokenizer
+   #:make-bpe-tokenizer-llama2))
 
 (in-package :caten/llm)
