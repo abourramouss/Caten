@@ -4,6 +4,7 @@
   (:export
    #:AbstractBuffer
    #:buffer-shape
+   #:buffer-storage-size
    #:buffer-stride
    #:buffer-dtype
    #:buffer-views
@@ -44,7 +45,8 @@
    #:runtime-backward
    #:runtime-buffer-type
    #:runtime-renderer
-   #:runtime-error)
+   #:runtime-error
+   #:runtime-invoke-jit-kernel)
   ;; Profile
   (:export
    #:*jit-time*

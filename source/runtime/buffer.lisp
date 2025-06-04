@@ -19,6 +19,7 @@ Buffer expects the following methods to be implemented:
   (:export
    #:AbstractBuffer
    #:buffer-shape
+   #:buffer-storage-size
    #:buffer-stride
    #:buffer-dtype
    #:buffer-views
@@ -66,6 +67,14 @@ Buffer expects the following methods to be implemented:
         (setf (slot-value copy slot) (slot-value buffer slot))))
     copy))
 
+(defmethod buffer-storage-size ((buffer AbstractBuffer))
+  (min
+   (apply #'* (buffer-shape buffer))
+   (apply #'* (loop for s in (buffer-shape buffer)
+                    for nth upfrom 0
+                    for v = (nth nth (buffer-views buffer))
+                    if (and (listp v) (fourth v)) collect 1 else collect s))))
+
 (defgeneric open-buffer (runtime buffer)
   (:documentation "Fills the (buffer-value buffer) with zero the given shape and dtype."))
 
@@ -73,7 +82,7 @@ Buffer expects the following methods to be implemented:
 
 (defgeneric transfer-from-array (runtime buffer array) (:documentation "array is a simple-array"))
 
-(defgeneric transfer-into-array (runtime buffer) (:documentation "Returns a storage array (flatten simple array)"))
+(defgeneric transfer-into-array (buffer) (:documentation "Returns a storage array (flatten simple array)"))
 
 (defgeneric copy-buffer-value (runtime buffer) (:documentation "Returns a copy of the buffer value."))
 

@@ -24,6 +24,8 @@
   
   ;; from tensor.lisp
   (:export
+   #:*global-runtime*
+   #:get-global-runtime
    #:make-tensor
    #:make-view-internal
    #:tensor-graph
@@ -206,6 +208,8 @@
    
    #:set-manual-seed
    #:with-manual-seed
+   #:*rng-counter*
+   #:get-rng-counter
    #:ax+b
    #:!full
    #:!rand

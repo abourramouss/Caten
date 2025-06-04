@@ -255,7 +255,7 @@ This feature is supported by [float-features](https://shinmera.github.io/float-f
     (:float64 float-features:double-float-negative-infinity)
     (:float32 float-features:single-float-negative-infinity)
     (:float16 (error "Not ready (TODO)"))
-    (:bfloat16 (error "Not ready (TODO"))))
+    (:bfloat16 (error "Not ready (TODO)"))))
 
 (defun nan (&key (dtype *default-float*))
   "
@@ -271,7 +271,7 @@ This feature is supported by [float-features](https://shinmera.github.io/float-f
     (:float64 float-features:double-float-nan)
     (:float32 float-features:single-float-nan)
     (:float16 (error "Not ready (TODO)"))
-    (:bfloat16 (error "Not ready (TODO"))))
+    (:bfloat16 (error "Not ready (TODO)"))))
 
 (defun float-infinity-p (x)
   (declare (type (or symbol number) x))
@@ -303,3 +303,15 @@ Returns `:INF` if the number is negative infinity, `:-INF` if the number is nega
      (if (> x 0) :inf :-inf))
     ((float-nan-p x) :nan)
     (t t)))
+;; ~~~ Temporary Runtime Management ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+(defparameter *global-runtime* (make-hash-table))
+
+(defun get-global-runtime ()
+  "
+```
+(get-global-runtime)
+```
+Returns a temporary runtime object just used for allocation global buffer."
+  (or (gethash (ctx:getenv :BACKEND) *global-runtime*)
+      (setf (gethash (ctx:getenv :BACKEND) *global-runtime*)
+            (make-runtime (make-graph) :runtime (caten/codegen/backend:get-runtime-type) :buffer-type (caten/codegen/backend:get-buffer-type)))))

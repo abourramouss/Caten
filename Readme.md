@@ -185,11 +185,19 @@ Before contributing, please note that there is no linter here. Make an effort to
 - [x] LISP VM (BACKEND=LISP)
 - [x] LISP JIT (BACKEND=NATIVE)
 - [x] CLANG JIT (BACKEND=CLANG)
-- [ ] METAL (BACKEND=METAL)
-- [ ] WebGPU
-- [ ] CUDA
-- [ ] LLVM
-- [ ] Finish AutoScheduler
+- [x] METAL (BACKEND=METAL)
+- [ ] WebGPU (BACKEND=WEBGPU)
+- [ ] CUDA (BACKEND=CUDA)
+- [ ] LLVM (BACKEND=LLVM)
+- [ ] OpenCL (BACKEND=OPENCL)
+- [ ] Finish AutoScheduler (Polyhedral Compiler + BEAM Search)
+
+### Runtimes
+
+- [x] LISP RUNTIME
+- [ ] Exported Lisp Runtime (BACKEND=NATIVE)
+- [ ] Exported to dylib (BACKEND=CLANG)
+- [ ] JavaScript Runtime (BACKEND=WEBGPU)
 
 ## Running tests
 
